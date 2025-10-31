@@ -1,3 +1,5 @@
+const sgMail = require("@sendgrid/mail");
+
 exports.handler = async function(event, context) {
   if (event.httpMethod !== "POST") {
     return {
@@ -54,6 +56,48 @@ exports.handler = async function(event, context) {
     //   text: csv
     // });
 
+    // ---- EMAIL THE CSV USING SENDGRID ----
+    const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+    if (!SENDGRID_API_KEY) throw new Error("SENDGRID_API_KEY not set");
+    sgMail.setApiKey(SENDGRID_API_KEY);
+    
+    // The participant's email is now the recipient
+    const TO_ADDRESS   = email;                                  // user input
+    const FROM_ADDRESS = "motion.collector.sender@gmail.com";  // your verified sender
+    //const CC_PI        = "YOUR_LAB_INBOX@YOURDOMAIN.edu";        // optional copy to yourself
+    
+    const subject = `Your Motion Data Submission`;
+    const textSummary = [
+      `Hello,`,
+      ``,
+      `Attached is the motion sensor data you just recorded.`,
+      ``,
+      `Device info: ${userAgent || "N/A"}`,
+      `Collected at: ${collectedAt || new Date().toISOString()}`,
+      ``,
+      `Best,`,
+      `Sturdy Lab Motion Data Collector`
+    ].join("\n");
+    
+    const msg = {
+      to: TO_ADDRESS,
+      from: FROM_ADDRESS,
+      subject,
+      text: textSummary,
+      attachments: [
+        {
+          content: Buffer.from(csv, "utf8").toString("base64"),
+          filename: "motion_data.csv",
+          type: "text/csv",
+          disposition: "attachment"
+        }
+      ]
+    };
+    
+    await sgMail.send(msg);
+    console.log("Email sent to participant:", TO_ADDRESS);
+    
+
     return {
       statusCode: 200,
       body: JSON.stringify({ ok: true })
@@ -66,3 +110,4 @@ exports.handler = async function(event, context) {
     };
   }
 };
+
