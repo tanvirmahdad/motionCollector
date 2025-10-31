@@ -1,0 +1,9 @@
+[build]
+  publish = "."            # serve the root (index.html) as the site
+  functions = "netlify/functions"
+
+# Nice-to-have redirect: /upload -> /.netlify/functions/upload
+[[redirects]]
+  from = "/upload"
+  to = "/.netlify/functions/upload"
+  status = 200

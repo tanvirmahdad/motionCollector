@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Motion Sensor Demo and Data Collection</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f172a;
+    color: #f8fafc;
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .card {
+    background: #1e293b;
+    border-radius: 1rem;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+    padding: 1.5rem 1.5rem 2rem;
+  }
+  h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.25rem;
+    text-align: center;
+  }
+  .sub {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+  label {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    display: block;
+    margin-bottom: 0.4rem;
+    font-weight: 500;
+  }
+  input[type="email"] {
+    width: 100%;
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #475569;
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  input[type="email"]:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.3);
+  }
+  .row {
+    margin-bottom: 1rem;
+  }
+  .btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  button {
+    flex: 1;
+    min-width: 30%;
+    border: 0;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.2;
+    color: #0f172a;
+    background: #38bdf8;
+    transition: all 0.12s linear;
+    text-align: center;
+  }
+  button[disabled]{
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn-stop {
+    background:#ef4444;
+    color:#fff;
+  }
+  .btn-send {
+    background:#34d399;
+    color:#0f172a;
+  }
+  .status-box {
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #f8fafc;
+    min-height: 4rem;
+    word-break: break-word;
+  }
+  .small-note {
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 0.5rem;
+    line-height: 1.4;
+  }
+  .danger {
+    color:#f87171;
+    font-weight:500;
+  }
+  .ok {
+    color:#4ade80;
+    font-weight:500;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Motion Sensor Demo and Data Collection</h1>
+  <div class="sub">
+    This page records phone motion (acceleration / rotation rate) with timestamps.
+  </div>
+
+  <div class="row">
+    <label for="email">Email to tag this data with:</label>
+    <input id="email" type="email" placeholder="you@example.com" autocomplete="email" />
+  </div>
+
+  <div class="btn-row">
+    <button id="startBtn">Start Collecting</button>
+    <button id="stopBtn" class="btn-stop" disabled>Stop</button>
+    <button id="sendBtn" class="btn-send" disabled>Send</button>
+  </div>
+
+  <div class="status-box" id="statusBox">
+    Status: idle
+  </div>
+
+  <div class="small-note">
+    Steps:<br/>
+    1. Enter your email.<br/>
+    2. Press "Start Collecting" and move your device.<br/>
+    3. Press "Stop".<br/>
+    4. Press "Send" to upload securely.<br/><br/>
+    iPhone/iPad: you may have to tap "Allow Motion &amp; Orientation Access."
+  </div>
+</div>
+
+<script>
+(function(){
+  let isRecording = false;
+  let samples = [];
+  let motionHandler = null;
+
+  const statusBox = document.getElementById('statusBox');
+  const startBtn  = document.getElementById('startBtn');
+  const stopBtn   = document.getElementById('stopBtn');
+  const sendBtn   = document.getElementById('sendBtn');
+  const emailInp  = document.getElementById('email');
+
+  function logStatus(msg, highlight){
+    let cls = '';
+    if (highlight === 'bad') cls = '<span class="danger">';
+    else if (highlight === 'ok') cls = '<span class="ok">';
+    statusBox.innerHTML = cls ? (cls+msg+'</span>') : msg;
+  }
+
+  function handleMotion(e){
+    const t = Date.now();
+    const acc = e.acceleration;
+    const accG = e.accelerationIncludingGravity;
+    const rot = e.rotationRate;
+
+    samples.push({
+      timestamp: t,
+      ax: acc ? acc.x : null,
+      ay: acc ? acc.y : null,
+      az: acc ? acc.z : null,
+      gx: accG ? accG.x : null,
+      gy: accG ? accG.y : null,
+      gz: accG ? accG.z : null,
+      rx: rot ? rot.alpha : null,
+      ry: rot ? rot.beta  : null,
+      rz: rot ? rot.gamma : null
+    });
+
+    if (samples.length % 10 === 0) {
+      logStatus(
+        `Recording… ${samples.length} samples collected.`,
+        'ok'
+      );
+    }
+  }
+
+  async function requestMotionAccessIfNeeded(){
+    if (typeof DeviceMotionEvent !== "undefined" &&
+        typeof DeviceMotionEvent.requestPermission === "function") {
+      try {
+        const res = await DeviceMotionEvent.requestPermission();
+        if (res !== "granted") {
+          throw new Error("Permission denied");
+        }
+      } catch (err) {
+        logStatus("Motion permission denied on this device.", "bad");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function startRecording(){
+    if (isRecording) return;
+    samples = [];
+    motionHandler = handleMotion;
+    window.addEventListener('devicemotion', motionHandler);
+
+    isRecording = true;
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    sendBtn.disabled = true;
+    logStatus("Recording started. Move/rotate your device.", "ok");
+  }
+
+  function stopRecording(){
+    if (!isRecording) return;
+    window.removeEventListener('devicemotion', motionHandler);
+    isRecording = false;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    sendBtn.disabled = samples.length === 0;
+    logStatus(
+      `Recording stopped. Total samples: ${samples.length}`,
+      samples.length ? "ok" : "bad"
+    );
+  }
+
+  function toCSV(){
+    const header = [
+      "timestamp",
+      "ax","ay","az",
+      "gx","gy","gz",
+      "rx","ry","rz"
+    ].join(",");
+
+    const rows = samples.map(s => ([
+      s.timestamp,
+      s.ax, s.ay, s.az,
+      s.gx, s.gy, s.gz,
+      s.rx, s.ry, s.rz
+    ].join(",")));
+
+    return header + "\n" + rows.join("\n");
+  }
+
+  async function uploadToServer(){
+    const email = emailInp.value.trim();
+    if(!email){
+        logStatus("Please enter an email first.", "bad");
+        return;
+    }
+    if(samples.length === 0){
+        logStatus("No data to send.", "bad");
+        return;
+    }
+
+    const csvData = toCSV();
+
+    try {
+      const resp = await fetch("/.netlify/functions/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email,
+          csv: csvData,
+          userAgent: navigator.userAgent,
+          collectedAt: new Date().toISOString()
+        })
+      });
+
+      if(!resp.ok){
+        throw new Error("Server error " + resp.status);
+      }
+
+      const result = await resp.json();
+      if(result.ok){
+        logStatus("Data uploaded successfully. Thank you!", "ok");
+        // Optionally lock UI
+        sendBtn.disabled = true;
+      } else {
+        logStatus("Upload finished but server did not confirm ok.", "bad");
+      }
+
+    } catch(err){
+      logStatus("Upload failed: " + err.message, "bad");
+    }
+  }
+
+  startBtn.addEventListener("click", async ()=>{
+    const granted = await requestMotionAccessIfNeeded();
+    if(!granted) return;
+    startRecording();
+  });
+
+  stopBtn.addEventListener("click", stopRecording);
+  sendBtn.addEventListener("click", uploadToServer);
+
+  logStatus("Status: idle. Enter your email, press Start, move your device, then Stop & Send.");
+})();
+</script>
+</body>
+</html>
